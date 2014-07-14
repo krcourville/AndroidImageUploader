@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">ImageUpload</string>
+    <string name="app_name">Android Image Uploader</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
     <string name="app_instructions">Complete the fields below and click Submit to upload an image.</string>
@@ -12,5 +12,7 @@
     <string name="photoSelectedLabel">Photo Selected</string>
     <string name="imgSelectedImage_contentDescription">Selected Image</string>
     <string name="default_post_url">http://mobile311test.cloudapp.net/Photos/Upload</string>
-
+    <string name="txtPostedUrlHelpText">If no result is displayed here, either an image has not yet been uploaded, or the server did not return resultant location.</string>
+    <string name="txtPostedImageUrlHint">No result</string>
+    <string name="txtHttpResponseHint">Http Response</string>
 </resources>

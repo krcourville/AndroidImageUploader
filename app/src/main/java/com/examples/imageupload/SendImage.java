@@ -4,12 +4,10 @@ import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
@@ -26,11 +24,9 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.MetadataException;
 import com.drew.metadata.exif.ExifIFD0Directory;
 
-import org.apache.http.entity.mime.content.FileBody;
 
 import java.io.*;
 import java.net.URISyntaxException;
-import java.text.*;
 import java.util.*;
 
 import static com.drew.metadata.exif.ExifIFD0Directory.*;
@@ -38,14 +34,14 @@ import static com.drew.metadata.exif.ExifIFD0Directory.*;
 
 public class SendImage extends Activity {
     private static final int CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE = 100;
-    public static final int MEDIA_TYPE_IMAGE = 1;
-    public static final int MEDIA_TYPE_VIDEO = 2;
+
     private static final int REQ_CODE_PICK_IMAGE = 2;
     private static Uri photoUri = null;
-    private static PostFileParams postFileParams = new PostFileParams();
     private static final String TAG = "SendImage.java";
     private ImageView imgSelectedImage = null;
     private TextView txtUrl = null;
+    private TextView txtPostedImageUrl = null;
+    private TextView txtHttpResponse = null;
 
 
     @Override
@@ -55,6 +51,8 @@ public class SendImage extends Activity {
 
         imgSelectedImage = (ImageView) findViewById(R.id.imgSelectedImage);
         txtUrl = (TextView) findViewById(R.id.txtUrl);
+        txtPostedImageUrl = (TextView) findViewById(R.id.txtPostedImageUrl);
+        txtHttpResponse = (TextView) findViewById(R.id.txtHttpResponse);
     }
 
     @Override
@@ -78,7 +76,6 @@ public class SendImage extends Activity {
 
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        postFileParams = new PostFileParams();
 
 
         switch (requestCode) {
@@ -106,9 +103,18 @@ public class SendImage extends Activity {
                 }
                 break;
         }
-        imgSelectedImage.setImageBitmap(null);
-        new doImageOrientationTask().execute();
-        new doImagePreviewTask().execute();
+        new DoImageOrientationTask().execute();
+        new DoImagePreviewTask().execute();
+    }
+
+    public void postedImageUrlClick(View view) {
+        if (txtPostedImageUrl.getText() == null) return;
+
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        String url = txtPostedImageUrl.getText().toString();
+        i.setDataAndType(Uri.parse(url),"image/*");
+
+        startActivity(i);
     }
 
 
@@ -116,7 +122,7 @@ public class SendImage extends Activity {
         Log.d(TAG, "takephotoClick()");
 
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        photoUri = getOutputMediaFileUri(MEDIA_TYPE_IMAGE);
+        photoUri = ImageUtils.getOutputMediaFileUri(ImageUtils.MEDIA_TYPE_IMAGE);
         Log.d(TAG, "Photo will be saved to: " + photoUri.toString());
         intent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
         startActivityForResult(intent, CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE);
@@ -125,61 +131,19 @@ public class SendImage extends Activity {
     public void pickphotoClick(View view) {
         Log.d(TAG, "pickphotoClick()");
 
-        Intent i = new Intent();
-        i.setType("image/*");
-        i.setAction(Intent.ACTION_GET_CONTENT);
-        startActivityForResult(Intent.createChooser(i, "Select a picture"), REQ_CODE_PICK_IMAGE);
+        Intent i = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(Intent.createChooser(i, "Pick a photo"), REQ_CODE_PICK_IMAGE);
     }
 
     public void submitClick(View view) {
         Log.d(TAG, "submitClick()");
 
-        postFileParams.setTargetUrl(txtUrl.getText().toString());
-        PostFileAsyncTask task = new PostFileAsyncTask();
 
-        task.execute(postFileParams);
-    }
-
-    private static Uri getOutputMediaFileUri(int type) {
-        return Uri.fromFile(getOutputMediaFile(type));
-    }
-
-    private static File getOutputMediaFile(int type) {
-        // To be safe, you should check that the SDCard is mounted
-        // using Environment.getExternalStorageState() before doing this.
-
-        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), "SendImage");
-        // This location works best if you want the created images to be shared
-        // between applications and persist after your app has been uninstalled.
-
-        // Create the storage directory if it does not exist
-        if (!mediaStorageDir.exists()) {
-            if (!mediaStorageDir.mkdirs()) {
-                Log.d(TAG, "failed to create directory");
-                return null;
-            }
-        }
-
-        // Create a media file name
-        return new File(
-                String.format("%s%s%s", mediaStorageDir.getPath(), File.separator, getMediaFilename(type))
-        );
-    }
-
-    private static String getMediaFilename(int type) {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        if (type == MEDIA_TYPE_IMAGE) {
-            return "IMG_" + timeStamp + ".jpg";
-        } else if (type == MEDIA_TYPE_VIDEO) {
-            return "VID_" + timeStamp + ".mp4";
-        } else {
-            return null;
-        }
+        new PostImageAsyncTask().execute();
     }
 
 
-    public class doImageOrientationTask extends AsyncTask<Void, Void, Integer> {
+    public class DoImageOrientationTask extends AsyncTask<Void, Void, Integer> {
         private ProgressDialog progressDialog;
 
         @Override
@@ -249,13 +213,13 @@ public class SendImage extends Activity {
         }
     }
 
-    public class doImagePreviewTask extends AsyncTask<Void, Void, Bitmap> {
+    public class DoImagePreviewTask extends AsyncTask<Void, Void, Bitmap> {
         private ProgressDialog progressDialog;
 
         @Override
         protected Bitmap doInBackground(Void... voids) {
             try {
-                return doImagePreview();
+                return ImageUtils.getThumbnailFromUri(getContentResolver(), photoUri);
             } catch (IOException e) {
                 e.printStackTrace();
                 return null;
@@ -263,6 +227,12 @@ public class SendImage extends Activity {
         }
 
         protected void onPreExecute() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    imgSelectedImage.setImageBitmap(null);
+                }
+            });
             progressDialog = new ProgressDialog(SendImage.this);
             progressDialog.setMessage("Loading image preview....");
             progressDialog.show();
@@ -272,6 +242,7 @@ public class SendImage extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    imgSelectedImage.setMaxHeight(result.getHeight());
                     imgSelectedImage.setImageBitmap(result);
                 }
             });
@@ -284,67 +255,76 @@ public class SendImage extends Activity {
             }
         }
 
-        private Bitmap doImagePreview() throws IOException {
-            InputStream inputStream = getContentResolver().openInputStream(photoUri);
-            Bitmap imageBitmap = BitmapFactory.decodeStream(inputStream);
-
-            int width = imgSelectedImage.getWidth() - 40;
-            int height = width + 20;
-            imageBitmap = Bitmap.createScaledBitmap(imageBitmap, width, height, false);
-
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            imageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
-            byte[] bytes = outputStream.toByteArray();
-
-            imageBitmap = BitmapFactory.decodeByteArray(outputStream.toByteArray(), 0, bytes.length);
-            return imageBitmap;
-        }
 
     }
 
 
-    public class PostFileAsyncTask extends AsyncTask<PostFileParams, Void, String> {
+    public class PostImageAsyncTask extends AsyncTask<Void, Void, String> {
+        private ProgressDialog progressDialog;
+        private String responseText = null;
+        private String responseUrl = null;
+
         protected void onPreExecute() {
             super.onPreExecute();
+            progressDialog = new ProgressDialog(SendImage.this);
+            progressDialog.setMessage("Uploading image...");
+            progressDialog.show();
         }
 
         @Override
-        protected String doInBackground(PostFileParams... params) {
-            PostFileParams postFileParams = (PostFileParams) params[0];
-            postFile(postFileParams);
-            return null;
+        protected String doInBackground(Void... params) {
+            try {
+                return postImage();
+            } catch (Exception e) {
+                e.printStackTrace();
+                return e.getMessage();
+            }
         }
 
         protected void onPostExecute(String lengthOfFile) {
             super.onPostExecute(lengthOfFile);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    txtPostedImageUrl.setText(responseUrl);
+                    txtHttpResponse.setText(responseText);
+                }
+            });
+
+            if (progressDialog.isShowing()) {
+                progressDialog.dismiss();
+            }
+        }
+
+        private String postImage() throws IOException {
+            Log.i(TAG, "Source photo uri: " + photoUri.toString());
+
+            String url = txtUrl.getText().toString();
+            Log.i(TAG, "Target url: " + url);
+
+            String filename = ImageUtils.getMediaFilename(ImageUtils.MEDIA_TYPE_IMAGE);
+            Log.i(TAG, "Posting to filename: " + filename);
+
+            Bitmap bitmap = ImageUtils.decodeUri(getApplicationContext(), photoUri, 436);
+            Log.d(TAG, "Image size is :" + bitmap.getByteCount());
+
+            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream);
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(outStream.toByteArray());
+
+            FileUploader uploader = new FileUploader(inputStream, url, filename);
+            uploader.upload();
+
+            Map<String, List<String>> headers = uploader.getResponseHeaders();
+            this.responseUrl = null;
+            if (headers.containsKey("Location")) {
+                this.responseUrl = headers.get("Location").get(0);
+            }
+            this.responseText = uploader.getServerResponseMessage();
+
+            return null;
         }
     }
 
-    private void postFile(PostFileParams postFileParams) {
-
-//        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-//        postFileParams.getSourceBitmap().compress(
-//                Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
-//        File f = new File(postFileParams.getSourceUri().getPath());
-//
-//
-//        FileBody body = new FileBody(f, postFileParams.getTargetFilename());
-//        MultipartEntityBuilder
-//
-//        MultipartEntity entity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
-//        entity.addPart("file", body);
-//
-////        String postReceiverUrl = postFileParams.g //"http://mobile311test.cloudapp.net/Photos/Upload";
-//        HttpPost httpPost = new HttpPost(postFileParams.getTargetUrl());
-//        httpPost.setEntity(entity);
-//        HttpClient httpClient = new DefaultHttpClient();
-//        try {
-//            HttpResponse response = httpClient.execute(httpPost);
-//            String responseStr = EntityUtils.toString(response.getEntity()).trim();
-//            Log.d(TAG, "Response text: " + responseStr);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-    }
 
 }

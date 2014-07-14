@@ -52,7 +52,7 @@
                 android:id="@+id/imgSelectedImage"
                 android:contentDescription="@string/imgSelectedImage_contentDescription"
                 android:adjustViewBounds="true"
-                android:clickable="true" />
+                android:clickable="false" />
 
             <EditText
                 android:layout_width="fill_parent"
@@ -65,11 +65,40 @@
 
             <Button
                 android:layout_width="fill_parent"
-                android:layout_height="83dp"
+                android:layout_height="wrap_content"
                 android:text="@string/btnSubmitText"
                 android:id="@+id/btnSubmit"
                 android:onClick="submitClick"
                 android:layout_marginTop="10dp" />
+
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                >
+                <EditText
+                    android:layout_width="fill_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/txtPostedImageUrlHint"
+                    android:id="@+id/txtPostedImageUrl"
+                    android:editable="false"
+                    android:clickable="true"
+                    android:onClick="postedImageUrlClick"
+                    android:inputType="textUri" />
+            </LinearLayout>
+
+            <EditText
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/txtPostedUrlHelpText"
+                android:textAppearance="?android:attr/textAppearanceSmall" />
+
+            <EditText
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?android:attr/textAppearanceSmall"
+                android:id="@+id/txtHttpResponse"
+                android:hint="@string/txtHttpResponseHint" />
 
         </LinearLayout>
     </ScrollView>
